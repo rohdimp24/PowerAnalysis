@@ -1,0 +1,227 @@
+---
+Bhoruka analysis
+---
+Try to find out if there is any relationship between the power, wind direction
+
+##Reading teh data
+```{r}
+turbineData<- read.csv(file="files/consolidated.csv", header=TRUE, sep=",")
+str(turbineData)
+
+curveIndexes1<-seq(from=1,to=9,by=1)
+curveIndexes2<-seq(from=10,to=29,by=1)
+
+p1=paste0("WTG00",curveIndexes1)
+p2=paste0("WTG0",curveIndexes2)
+curveIndexes=c(p1,p2)
+curveIndexes1=as.factor(curveIndexes)
+```
+
+
+##Get compass Direction: Based on the direction of the wind in degrees , it returns the compass direction
+```{r}
+getCompassDirection=function(heading){
+  if(heading>348.75 & heading <359.99)
+    "N"
+  else if(heading>=0 & heading <11.25)
+    "N"
+  else if(heading>11.25 & heading <33.75)
+    "NNE"
+  else if(heading>33.75 & heading <56.25)
+    "NE"
+  else if(heading>56.25 & heading <78.75)
+    "ENE"
+  else if(heading>78.75 & heading <101.25)
+    "E"
+  else if(heading>101.25 & heading <123.75)
+    "ESE"
+  else if(heading>123.75 & heading <146.25)
+    "SE"
+  else if(heading>146.25 & heading <168.75)
+    "SSE"
+  else if(heading>168.75 & heading <191.25)
+    "S"
+  else if(heading>191.25 & heading <213.75)
+    "SSW"
+  else if(heading>213.75 & heading <236.25)
+    "SW"
+  else if(heading>236.25 & heading <258.75)
+    "WSW"
+  else if(heading>258.75 & heading <281.25)
+    "W"
+  else if(heading>281.25 & heading <303.75)
+    "WNW"
+  else if(heading>303.75 & heading <326.25)
+    "NW"
+  else if(heading>326.25 & heading <348.75)
+    "NNW"
+}
+
+
+
+```
+
+
+##Create teh necessary data frames represting power, nacelleDirecation, wind speed and compass direction. This is a derived data
+
+```{r}
+tfpower=subset(turbineData,turbineData$Parameter=='Power'&turbineData$SystemName==curveIndexes[1])[4]
+tfWindSpeed=subset(turbineData,turbineData$Parameter=='Wind speed'&turbineData$SystemName==curveIndexes[1])[4]
+tfNacelle=  subset(turbineData,turbineData$Parameter=='Nacelle position'&turbineData$SystemName==curveIndexes[1])[4]
+#add the compass directiuons for the Nacelle
+tfCompassDirection=subset(turbineData,turbineData$Parameter=='Nacelle position'&turbineData$SystemName==curveIndexes[1])[4]
+
+for(i in 1:29){
+  tfpower[,curveIndexes[i]]=subset(turbineData,turbineData$Parameter=='Power'&turbineData$SystemName==curveIndexes1[i])[3]
+  tfWindSpeed[,curveIndexes[i]]=subset(turbineData,turbineData$Parameter=='Wind speed'&turbineData$SystemName==curveIndexes1[i])[3]
+  tfNacelle[,curveIndexes[i]]=subset(turbineData,turbineData$Parameter=='Nacelle position'&turbineData$SystemName==curveIndexes1[i])[3]
+  
+}
+
+#add the compass direction
+for(i in 1:29){
+  
+  tfCompassDirection[,curveIndexes[i]]=sapply(tfNacelle[,curveIndexes[i]],getCompassDirection)
+
+}
+
+```
+
+##data cleaning
+* 1. First removing the localtime column
+* 2. Not all the data is interesting. The -ve power observations are of not much value and they will actually lower the average power per turbine. So removing the observations 1-11 and 33-39
+
+
+```{r}
+tfpower=tfpower[,c(2:30)]
+tfpower=tfpower[12:32,]
+
+tfNacelle=tfNacelle[,c(2:30)]
+tfNacelle=tfNacelle[12:32,]
+
+tfWindSpeed=tfWindSpeed[,c(2:30)]
+tfWindSpeed=tfWindSpeed[12:32,]
+
+tfCompassDirection=tfCompassDirection[,c(2:30)]
+tfCompassDirection=tfCompassDirection[12:32,]
+
+curveNames=names(tfpower)
+
+```
+
+##Summary Statistics
+Some of the userful stats from the data are max,min power, avg power, avg wind direction, max-min wind direction
+
+```{r}
+
+turbineSummaryMat=matrix(1:29*4,nrow=29,ncol=4)
+rownames(turbineSummaryMat) <- curveNames[1:29]
+colnames(turbineSummaryMat)<-c("maxWindSpeed","minWindSpeed","maxNacAngle","minNacAngle")
+turbineSummary=as.data.frame(turbineSummaryMat)
+turbineSummary$maxWindSpeed=sapply(tfWindSpeed,max)
+turbineSummary$minWindSpeed=sapply(tfWindSpeed,min)
+turbineSummary$maxNacAngle=sapply(tfNacelle,max)
+turbineSummary$minNacAngle=sapply(tfNacelle,min)
+turbineSummary$spreadNacAngle=turbineSummary$maxNacAngle-turbineSummary$minNacAngle
+
+
+windDirections=rep(0,29)
+for ( i in 1:29)
+{
+  windDirections[i]=names(sort(table(sapply(tfNacelle[,i],getCompassDirection)),decreasing = TRUE)[1])
+}
+
+turbineSummary$windDirection=as.factor(windDirections)
+turbineSummary$maxPower=sapply(tfpower,max)
+turbineSummary$minPower=sapply(tfpower,min)
+turbineSummary$avgPower=sapply(tfpower,mean)
+turbineSummary$totalPower=sapply(tfpower,sum)
+
+str(turbineSummary)
+
+
+```
+##distribution of power wrt wind directioon
+
+```{r}
+sort(by(turbineSummary$totalPower,turbineSummary$windDirection,sum),decreasing = TRUE)
+
+
+```
+
+##Plots of wind directaions
+
+```{r}
+#plottig the winddirections and the windspeed
+library(plotrix)
+for (i in 1:29){
+  
+  spread=max(tfNacelle[,i])-min(tfNacelle[,i])
+  label=paste(curveNames[i],spread)
+  polar.plot(tfWindSpeed[,i],polar.pos=tfNacelle[,i],start=90,clockwise=TRUE,rp.type="p",
+             point.symbols=19,boxed.radial=FALSE, 
+             radial.labels="",main = label,lwd=2,line.col=4)
+
+  
+}
+
+```
+
+
+##correlation analysis for the power data
+
+```{r}
+
+correlationMatrix<-cor(tfpower,use='pairwise.complete.obs')
+correlationMatrix[correlationMatrix<0.95]<-NA
+filteredList<-apply(correlationMatrix,1,sort,decreasing=TRUE)
+
+#correlationNascMatrix<-cor(tfNacelle,use='pairwise.complete.obs')
+#correlationNascMatrix[correlationNascMatrix<0.95]<-NA
+#filteredListNasc<-apply(correlationNascMatrix,1,sort,decreasing=TRUE)
+
+```
+
+##draw curves
+
+```{r}
+
+drawCurves=function(curve1,curve2)
+{
+
+plot(tfpower[,curve1],type='l',ylab = curve1,xlab = curve2)
+points(tfpower[,curve2],col="green",type='l')
+
+#points(tfWindSpeed[,curve1],col="yellow",type='l')
+#points(tfWindSpeed[,curve2],type='l')
+#points(tfNacelle[,curve1],col="red",type='l')
+#points(tfNacelle[,curve2],col="blue",type='l')
+}
+
+
+
+```
+
+draw the curves for a particular turbine with respect to the other turbines to see 
+how it is performing 
+
+```{r}
+
+for (i in 1:29){
+  drawCurves(curveNames[3],curveNames[i])
+}
+
+```
+
+##
+1.Some of the unkowns
+2. what is the operating state parameter..these are some of the states that determine if the turbine is working properly or not
+3.what is availability parameter
+4. what is State and Fault
+5. Can we find out the turbines which are performing high than the one that are not performing that much
+6. Can we correlate the power output with the wind directions
+
+
+
+
+

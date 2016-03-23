@@ -1,0 +1,462 @@
+
+Read the data
+```{r}
+turbineData<- read.csv(file="files/turbines_actual_data.csv", header=TRUE, sep=";")
+str(turbineData)
+
+curveIndexes1<-seq(from=1,to=9,by=1)
+#curveIndexes2<-c(10:20,22,23,25:28,31,34,38,40:43,45:52,55,56)
+curveIndexes2<-seq(from=10,to=56,by=1)
+curveIndexesCombined=c(paste0("WTG00",1:9),paste0("WTG0",10:20),"WTG022","WTG023",
+                       paste0("WTG0",25:28),"WTG031","WTG034","WTG038",paste0("WTG0",40:43),
+                       paste0("WTG0",45:52),"WTG055","WTG056")
+
+p1=paste0("WTG00",curveIndexes1)
+p2=paste0("WTG0",curveIndexes2)
+curveIndexes=c(p1,p2)
+curveIndexes1=as.factor(curveIndexes)
+curveIndexes1=curveIndexes
+
+```
+Define the function to get the compass directions
+
+```{r}
+getCompassDirection=function(heading){
+  if (is.na(heading))
+    NA
+  if(heading>348.75 & heading <360.1)
+    "N"
+  else if(heading>=0 & heading <11.25)
+    "N"
+  else if(heading>11.25 & heading <33.75)
+    "NNE"
+  else if(heading>33.75 & heading <56.25)
+    "NE"
+  else if(heading>56.25 & heading <78.75)
+    "ENE"
+  else if(heading>78.75 & heading <101.25)
+    "E"
+  else if(heading>101.25 & heading <123.75)
+    "ESE"
+  else if(heading>123.75 & heading <146.25)
+    "SE"
+  else if(heading>146.25 & heading <168.75)
+    "SSE"
+  else if(heading>168.75 & heading <191.25)
+    "S"
+  else if(heading>191.25 & heading <213.75)
+    "SSW"
+  else if(heading>213.75 & heading <236.25)
+    "SW"
+  else if(heading>236.25 & heading <258.75)
+    "WSW"
+  else if(heading>258.75 & heading <281.25)
+    "W"
+  else if(heading>281.25 & heading <303.75)
+    "WNW"
+  else if(heading>303.75 & heading <326.25)
+    "NW"
+  else if(heading>326.25 & heading <348.75)
+    "NNW"
+}
+
+```
+
+populate the data structure
+
+```{r}
+tt=subset(turbineData,turbineData$turbine_param=='Power'&turbineData$turbine_name==curveIndexes1[1])[c(1:2900),2]
+tt<-as.Date(tt)
+days=as.factor(format(tt,'%d'))
+
+
+
+tfpower=data.frame(matrix(ncol=1,nrow=2900))
+tfWindSpeed=data.frame(matrix(ncol=1,nrow=2900))
+tfNacelle=data.frame(matrix(ncol=1,nrow=2900))
+tfCompassDirection=data.frame(matrix(ncol=1,nrow=2900))
+tfdays=data.frame(matrix(ncol=1,nrow=2900))
+
+for(i in 1:56){
+    #print(j)
+  #tfpower[,curveIndexes[i]]=rep(NA,3000)
+  tfpower[,curveIndexes[i]]=subset(turbineData,turbineData$turbine_param=='Power'&turbineData$turbine_name==curveIndexes1[i])[c(1:2900),4]
+ # tfpower[,curveIndexes[i]]=tt[c(1:2900),]
+  tfWindSpeed[,curveIndexes[i]]=subset(turbineData,turbineData$turbine_param=='Wind speed'&turbineData$turbine_name==curveIndexes1[i])[c(1:2900),4]
+  
+  tfNacelle[,curveIndexes[i]]=subset(turbineData,turbineData$turbine_param=='Nacelle position'&turbineData$turbine_name==curveIndexes1[i])[c(1:2900),4]
+  #tfdays[,curveIndexes[i]]=days[1:2900]
+  
+
+}
+
+tfpower[1]<-NULL
+tfWindSpeed[1]<-NULL
+tfNacelle[1]<-NULL
+#tfdays[1]<-NULL
+
+#turbinesToRemove=c("WTG021","WTG024","WTG029","WTG030","WTG032","WTG033",
+ #                  "WTG035","WTG036","WTG037","WTG039","WTG044","WTG053","WTG054")
+
+#solution to remove the NA columns #http://stackoverflow.com/questions/15968494/how-to-delete-columns-with-na-in-r
+tfpower=tfpower[, colSums(is.na(tfpower)) != nrow(tfpower)]
+tfWindSpeed=tfWindSpeed[, colSums(is.na(tfWindSpeed)) != nrow(tfWindSpeed)]
+tfNacelle=tfNacelle[, colSums(is.na(tfNacelle)) != nrow(tfNacelle)]
+#tfdays=tfdays[, colSums(is.na(tfdays)) != nrow(tfdays)]
+
+
+#add the compass direction
+for(i in c(1:43)){
+  
+  tfCompassDirection[,curveIndexesCombined[i]]=sapply(tfNacelle[,curveIndexesCombined[i]],getCompassDirection)
+  tfdays[,curveIndexesCombined[i]]=days[1:2900]
+  
+}
+tfCompassDirection[1]<-NULL
+tfdays[1]<-NULL
+#tfNacelle=tfNacelle[, colSums(is.na(tfNacelle)) != nrow(tfNacelle)]
+
+```
+
+Grouping per day for directions
+```{r}
+meanDirection=function(x)
+{
+  #names(sort(table(x),decreasing = TRUE))[1]
+  sort(table(x),decreasing = TRUE)
+
+}
+
+changingDirection=function(x)
+{
+  ll=length(names(sort(table(x))))
+  ss=sum(table(x))
+  as.character(c(ll,":",ss))
+}
+
+countUniqueDirections=function(x)
+{
+  ll=length(names(sort(table(x))))
+  return(ll);
+}
+
+countNumberOfReadings=function(x)
+{
+  ss=sum(table(x))
+  return(ss)
+}
+
+myMean=function(x)
+{
+  ss=sum(table(x))
+  #return(ll);
+  return(sum(x)/ss)
+}
+
+#from http://stackoverflow.com/questions/5531471/combining-unequal-columns-in-r
+#we need to fill the NA in the right locations. currently it is being filled at the end. 
+# we need to reshape the vector/list so that it fits in the correct location
+convertingListToDaysMatrix=function(listData)
+{
+  nm <-listData
+  
+  max_length <- 16 #max(unlist(lapply(nm,length)))
+  nm_filled <- lapply(nm,function(x) {ans <- rep(NA,length=max_length);
+                                      ans[1:length(x)]<- x;
+                                      return(ans)})
+  matData=do.call(cbind,nm_filled)
+  matData=t(matData)
+  colnames(matData)=stdCompassDirections
+  return(matData)
+  
+}
+
+getDirectionVectorForDay=function(windDirectionperDayList)
+{
+  ##way to convert the list into all direction list
+  
+  directionListItem=windDirectionperDayList
+  directionNamesInList<-names(directionListItem[[1]])
+  #find the directions that are not present
+  directionNamesUnlist<-setdiff(stdCompassDirections,sapply(directionNamesInList,unlist))
+  #x=as.matrix(directionListItem[[1]])
+  
+  #the list of directions present 
+  cl=list()
+  #to add NAs
+  cl2=list()
+  directionItemUnlisted=sapply(directionListItem[[1]],unlist)
+  for(i in 1:length(directionItemUnlisted))
+  {
+    cl[[i]]<-c(directionNamesInList[i],directionItemUnlisted[[i]])
+  }
+  
+   if(length(directionNamesUnlist)>0)
+   {
+    for(j in 1:length(directionNamesUnlist))
+     {
+      cl2[[j]]<-c(directionNamesUnlist[j],NA)
+     }
+   }
+  
+  mat1=do.call(cbind,cl)
+  mat2=do.call(cbind,cl2)
+  combinedMat=cbind2(mat1,mat2)
+  
+  #this steo will remove the extra colums
+  nn=combinedMat[1,]
+  colnames(combinedMat)<-nn
+  combinedMat=t(combinedMat)
+  combinedMat=combinedMat[,-1]
+  
+  #now final
+  finalcc=list()
+  for(i in stdCompassDirections)
+  {
+    finalcc[i]=combinedMat[i]
+  }
+  
+  return(unlist(finalcc))
+}
+
+
+
+generateDayVersusDirectionMatrix=function(paramterList,dayNames,directionNames)
+{
+  dayMatrix=data.frame(matrix(ncol=16))
+  for(i in 1:length(dayNames))
+  {
+    xx=getDirectionVectorForDay(paramterList[i])
+    dayMatrix=rbind(dayMatrix,xx)
+  }
+  #remove the first row
+  dayMatrix=dayMatrix[-1,]
+  #now add the row names and colnames
+  colnames(dayMatrix)=directionNames
+  rownames(dayMatrix)=dayNames
+  return(dayMatrix)
+}
+
+
+
+
+```
+
+
+
+Get the summary of the data
+
+```{r, echo=FALSE}
+#tfpower=tfpower[,c(1:20)]
+#tfNacelle=tfNacelle[,c(1:20)]
+#tfWindSpeed=tfWindSpeed[,c(1:20)]
+#tfCompassDirection=tfCompassDirection[,c(1:20)]
+curveNames=names(tfpower)
+
+turbineSummaryMat=matrix(1:43*4,nrow=43,ncol=4)
+rownames(turbineSummaryMat) <- curveNames[1:43]
+colnames(turbineSummaryMat)<-c("maxWindSpeed","minWindSpeed","maxNacAngle","minNacAngle")
+turbineSummary=as.data.frame(turbineSummaryMat)
+turbineSummary$maxWindSpeed=sapply(tfWindSpeed,max)
+turbineSummary$minWindSpeed=sapply(tfWindSpeed,min)
+turbineSummary$maxNacAngle=sapply(tfNacelle,max)
+turbineSummary$minNacAngle=sapply(tfNacelle,min)
+turbineSummary$spreadNacAngle=turbineSummary$maxNacAngle-turbineSummary$minNacAngle
+
+
+windDirections=rep(0,43)
+for ( i in 1:43)
+{
+  windDirections[i]=names(sort(table(sapply(tfNacelle[,i],getCompassDirection)),decreasing = TRUE)[1])
+}
+
+turbineSummary$windDirection=as.factor(windDirections)
+turbineSummary$maxPower=sapply(tfpower,max)
+turbineSummary$minPower=sapply(tfpower,min)
+turbineSummary$avgPower=sapply(tfpower,mean)
+turbineSummary$totalPower=sapply(tfpower,sum)
+str(turbineSummary)
+
+#i guess this way of concluding on the wind distribution is incorrect. It will be range of directions
+#get the wind directions distribution
+#cat("summary of wind directions for all turbines\n")
+#print(table(turbineSummary$windDirection))
+
+#get the power distribution per direction
+#cat("Disrtibution of power in each direction \n")
+#print(sort(by(turbineSummary$totalPower,turbineSummary$windDirection,sum)))
+
+cat("Summary Statistics")
+print(turbineSummary)
+
+```
+
+Generate the distributions for the turbines
+
+```{r}
+
+getTurbineLevelDetails=function(turbineNumber){
+ # turbineNumber=2
+  cat("At turbine level \n")
+  cat("-----------------------------------------\n")
+  directions<-tfCompassDirection[turbineNumber]
+  powers<-tfpower[turbineNumber]
+  windspeed=tfWindSpeed[turbineNumber]
+  #get the days
+  days=tfdays[turbineNumber]
+  
+  #gives the distribution of the compass directions..
+  directionDist=sort(table(directions),decreasing = TRUE)
+  print(directionDist)
+  #in each direction whta was the power generation
+  powerDist=sort(by(powers,directions,sum),decreasing = TRUE)
+  cat("power distribution \n")
+  print(powerDist)
+  #in each direction waht was the total windd speed
+  windDist=sort(by(windspeed,directions,sum),decreasing=TRUE)
+  cat("windspeed distribution \n")
+  print(windDist)
+  
+  cat("Day Wise distribution \n")
+  #day wise analysis
+  windDirectionperDay=by(directions,days,meanDirection)
+  #print(windDirectionperDay)
+  
+  #get the matrix
+  dayNames=names(table(days))
+  #windDirectionPerDayMatrix=data.frame(matrix(ncol=16))
+  #for(i in 1:length(dayNames))
+  #{
+  #  xx=getDirectionVectorForDay(windDirectionperDay[i])
+  #  windDirectionPerDayMatrix=rbind(windDirectionPerDayMatrix,xx)
+  #}
+  ##remove the first row
+  #windDirectionPerDayMatrix=windDirectionPerDayMatrix[-1,]
+  ##now add the row names and colnames
+  #colnames(windDirectionPerDayMatrix)=stdCompassDirections
+  #rownames(windDirectionPerDayMatrix)=dayNames
+  
+  cat("In matrix format \n")
+  windDirectionPerDayMatrix=generateDayVersusDirectionMatrix(windDirectionperDay,dayNames,stdCompassDirections)
+  
+
+  #print the data in the form of a matrix
+  #print(convertingListToDaysMatrix(windDirectionperDay))
+  
+  #how many times the direction changed per day
+  #cat("How many times the Nascelle direction changed and total readings..\n")
+  changingDirectionsPerDay=by(directions,days,changingDirection)
+  #print(changingDirectionsPerDay);
+  
+  #power distribution perday
+  cat("Power distribution per day..\n")
+  powerPerDay=sort(by(powers,days,sum),decreasing = TRUE)
+  print(powerPerDay)
+  
+  powerUnsorted=by(powers,days,sum)
+  
+  barplot(powerPerDay)
+  
+  windSpeedPerDay=by(windspeed,days,sum)
+  avgWindSpeedPerDay=by(windspeed,days,myMean)
+  
+  #consolidated matrix containing the wind variations , power output, number of times it changed
+  windDirectionPerDayMatrix[,17]=powerUnsorted
+  windDirectionPerDayMatrix[,18]=by(directions,days,countUniqueDirections)
+  windDirectionPerDayMatrix[,19]=by(directions,days,countNumberOfReadings)
+  windDirectionPerDayMatrix[,20]=by(windspeed,days,myMean)
+  
+  windMatColNames=colnames(windDirectionPerDayMatrix)
+  windMatColNames[17]="Power"
+  windMatColNames[18]="#Wind Swings"
+  windMatColNames[19]="Reading Counts"
+  windMatColNames[20]="Avg Wind Speed"
+  colnames(windDirectionPerDayMatrix)=windMatColNames
+  print(windDirectionPerDayMatrix)
+  
+  barplot(sort(avgWindSpeedPerDay,decreasing = TRUE))
+  
+  
+  
+  
+  library(plotrix)
+  spread=max(tfNacelle[,turbineNumber])-min(tfNacelle[,turbineNumber])
+  label=paste(curveNames[turbineNumber],spread)
+  polar.plot(tfWindSpeed[,turbineNumber],polar.pos=tfNacelle[,turbineNumber],
+             start=90,clockwise=TRUE,rp.type="s",
+             point.symbols=19,boxed.radial=FALSE, 
+             radial.labels="",main = label,lwd=2,line.col=4)
+  
+  
+  
+  
+  ###for the matrix
+  powerDistList=as.list(powerDist)
+  windSpeedList=as.list(windDist)
+  windDirectionList=as.list(directionDist)
+  #getPowerForDirectionsVector(powerDist)
+  powerVector=vector(mode="numeric", length=0)
+  windSpeedVector=vector(mode="numeric",length=0)
+  windDirectionVector=vector(mode="numeric",length=0)
+  for(j in stdCompassDirections)
+  {
+    powerVector[j]=powerDistList[[j]]  
+    windSpeedVector[j]=windSpeedList[[j]]
+    windDirectionVector[j]=windDirectionList[[j]]
+  }
+  
+  return (list("power"=powerVector,"windSpeed"=windSpeedVector,"windDirection"=windDirectionVector));
+  
+
+}
+
+
+
+#we need to capture the powerGeneration in each direction
+stdCompassDirections=c("N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW")
+powerPerDirectionMat=data.frame(matrix(nrow=16))
+rownames(powerPerDirectionMat)=stdCompassDirections
+#we need to capture the windSpeed in each direction
+windspeedPerDirectionMat=data.frame(matrix(nrow=16))
+rownames(windspeedPerDirectionMat)=stdCompassDirections
+#we need to capture the winddirections for each turbine
+windDirectionMat=data.frame(matrix(nrow=16))
+rownames(windDirectionMat)=stdCompassDirections
+
+#we need to capture the day and wind directions 
+windDirectionDayWiseMat=data.frame(matrix(nrow=16))
+rownames(windDirectionDayWiseMat)=stdCompassDirections
+
+
+#generate the distributions for all the turbines
+
+
+
+
+for(i in 1:43){
+
+    listVariables=getTurbineLevelDetails(i)
+    powervector=listVariables$power
+    windSpeedVector=listVariables$windSpeed
+    windDirectionVector=listVariables$windDirection
+    powerPerDirectionMat[i]=powervector
+    windspeedPerDirectionMat[i]=windSpeedVector
+    windDirectionMat[i]=windDirectionVector
+}
+
+colnames(powerPerDirectionMat)=curveNames[1:43]
+colnames(windspeedPerDirectionMat)=curveNames[1:43]
+colnames(windDirectionMat)=curveNames[1:43]
+
+print(powerPerDirectionMat)
+print(windspeedPerDirectionMat)
+print(windDirectionMat)
+
+
+
+
+
+
+
+````
+

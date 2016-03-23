@@ -1,0 +1,503 @@
+
+Read the data from the file containing the curves exported from UNICORN
+```{r,echo=FALSE}
+#curves=read.csv("curveDataBig.txt")
+#curves1=read.csv("curveData4.txt")
+#filenameToRead<-"curveData4.txt"
+#this is the full scale
+#turbineData=read.csv(file="files/turbines_actual_data.csv", header=TRUE, sep=",")
+turbineData<- read.csv(file="files/turbines_actual_data.csv", header=TRUE, sep=";")
+str(turbineData)
+
+curveIndexes1<-seq(from=1,to=9,by=1)
+#curveIndexes2<-c(10:20,22,23,25:28,31,34,38,40:43,45:52,55,56)
+curveIndexes2<-seq(from=10,to=56,by=1)
+curveIndexesCombined=c(paste0("WTG00",1:9),paste0("WTG0",10:20),"WTG022","WTG023",
+                       paste0("WTG0",25:28),"WTG031","WTG034","WTG038",paste0("WTG0",40:43),
+                       paste0("WTG0",45:52),"WTG055","WTG056")
+
+p1=paste0("WTG00",curveIndexes1)
+p2=paste0("WTG0",curveIndexes2)
+curveIndexes=c(p1,p2)
+curveIndexes1=as.factor(curveIndexes)
+curveIndexes1=curveIndexes
+
+tf=data.frame(matrix(ncol=1,nrow=2900))
+
+for(i in 1:56){
+   tf[,curveIndexes[i]]=subset(turbineData,turbineData$turbine_param=='Power'&turbineData$turbine_name==curveIndexes1[i])[c(1:2900),4]
+ 
+}
+
+tf[1]<-NULL
+
+tf=tf[, colSums(is.na(tf)) != nrow(tf)]
+
+#curves=tf[1:30]
+#removing the -negative values for all so taking observations from 12 to 32
+#curveOperatingPoints=c(11:33)
+curves=tf
+
+#check the number of observations
+str(curves)
+
+#create a new file
+#cat(filenameToRead,file="output.txt",append=FALSE)
+#cat("\n=================================================\n",file="output.txt",append=TRUE)
+
+#get the names of the curves ..useful for the display purpose
+curveNames=names(curves[1:43])
+curveNames
+len=length(curveNames)
+curveNamesMat=matrix(1:len*3,ncol=3,nrow=len)
+curveNamesMat<-as.matrix(curveNames)
+#colnames(curveNamesMat)<-c("ID","Name","System")
+#rownames(curveNamesMat)<-curveNamesMat[1:len,1]
+
+
+
+#set the limit of the correlation to 0.96
+filterFactor=0.96
+```
+
+prepare the statistics data
+
+
+```{r}
+getCompassDirection=function(heading){
+  if(heading>348.75 & heading <359.99)
+    "N"
+  else if(heading>=0 & heading <11.25)
+    "N"
+  else if(heading>11.25 & heading <33.75)
+    "NNE"
+  else if(heading>33.75 & heading <56.25)
+    "NE"
+  else if(heading>56.25 & heading <78.75)
+    "ENE"
+  else if(heading>78.75 & heading <101.25)
+    "E"
+  else if(heading>101.25 & heading <123.75)
+    "ESE"
+  else if(heading>123.75 & heading <146.25)
+    "SE"
+  else if(heading>146.25 & heading <168.75)
+    "SSE"
+  else if(heading>168.75 & heading <191.25)
+    "S"
+  else if(heading>191.25 & heading <213.75)
+    "SSW"
+  else if(heading>213.75 & heading <236.25)
+    "SW"
+  else if(heading>236.25 & heading <258.75)
+    "WSW"
+  else if(heading>258.75 & heading <281.25)
+    "W"
+  else if(heading>281.25 & heading <303.75)
+    "WNW"
+  else if(heading>303.75 & heading <326.25)
+    "NW"
+  else if(heading>326.25 & heading <348.75)
+    "NNW"
+}
+
+
+tfpower=data.frame(matrix(ncol=1,nrow=2900))
+tfWindSpeed=data.frame(matrix(ncol=1,nrow=2900))
+tfNacelle=data.frame(matrix(ncol=1,nrow=2900))
+tfCompassDirection=data.frame(matrix(ncol=1,nrow=2900))
+
+
+for(i in 1:56){
+    #print(j)
+  #tfpower[,curveIndexes[i]]=rep(NA,3000)
+  tfpower[,curveIndexes[i]]=subset(turbineData,turbineData$turbine_param=='Power'&turbineData$turbine_name==curveIndexes1[i])[c(1:2900),4]
+ # tfpower[,curveIndexes[i]]=tt[c(1:2900),]
+  tfWindSpeed[,curveIndexes[i]]=subset(turbineData,turbineData$turbine_param=='Wind speed'&turbineData$turbine_name==curveIndexes1[i])[c(1:2900),4]
+  
+  tfNacelle[,curveIndexes[i]]=subset(turbineData,turbineData$turbine_param=='Nacelle position'&turbineData$turbine_name==curveIndexes1[i])[c(1:2900),4]
+  #tfdays[,curveIndexes[i]]=days[1:2900]
+  
+
+}
+
+tfpower[1]<-NULL
+tfWindSpeed[1]<-NULL
+tfNacelle[1]<-NULL
+#tfdays[1]<-NULL
+
+#turbinesToRemove=c("WTG021","WTG024","WTG029","WTG030","WTG032","WTG033",
+ #                  "WTG035","WTG036","WTG037","WTG039","WTG044","WTG053","WTG054")
+
+#solution to remove the NA columns #http://stackoverflow.com/questions/15968494/how-to-delete-columns-with-na-in-r
+tfpower=tfpower[, colSums(is.na(tfpower)) != nrow(tfpower)]
+tfWindSpeed=tfWindSpeed[, colSums(is.na(tfWindSpeed)) != nrow(tfWindSpeed)]
+tfNacelle=tfNacelle[, colSums(is.na(tfNacelle)) != nrow(tfNacelle)]
+
+
+#add the compass direction
+for(i in c(1:43)){
+  
+  tfCompassDirection[,curveIndexesCombined[i]]=sapply(tfNacelle[,curveIndexesCombined[i]],getCompassDirection)
+  #tfdays[,curveIndexesCombined[i]]=days[1:2900]
+  
+}
+tfCompassDirection[1]<-NULL
+
+
+
+
+
+curveNames=names(tfpower)
+
+```
+
+##Summary Statistics
+Some of the userful stats from the data are max,min power, avg power, avg wind direction, max-min wind direction
+
+```{r}
+numberOfTurbines=ncol(tfpower)
+
+turbineSummaryMat=matrix(1:numberOfTurbines*4,nrow=numberOfTurbines,ncol=4)
+rownames(turbineSummaryMat) <- curveNames[1:numberOfTurbines]
+colnames(turbineSummaryMat)<-c("maxWindSpeed","minWindSpeed","maxNacAngle","minNacAngle")
+turbineSummary=as.data.frame(turbineSummaryMat)
+turbineSummary$maxWindSpeed=sapply(tfWindSpeed,max)
+turbineSummary$minWindSpeed=sapply(tfWindSpeed,min)
+turbineSummary$maxNacAngle=sapply(tfNacelle,max)
+turbineSummary$minNacAngle=sapply(tfNacelle,min)
+turbineSummary$spreadNacAngle=turbineSummary$maxNacAngle-turbineSummary$minNacAngle
+
+
+windDirections=rep(0,numberOfTurbines)
+for ( i in 1:numberOfTurbines)
+{
+  windDirections[i]=names(sort(table(sapply(tfNacelle[,i],getCompassDirection)),decreasing = TRUE)[1])
+}
+
+turbineSummary$windDirection=as.factor(windDirections)
+turbineSummary$maxPower=sapply(tfpower,max)
+turbineSummary$minPower=sapply(tfpower,min)
+turbineSummary$avgPower=sapply(tfpower,mean)
+turbineSummary$totalPower=sapply(tfpower,sum)
+str(turbineSummary)
+
+```
+
+
+
+The data contains about 200 curves with X and Y value. X being the time axis and Y are the amplitudes.
+For the correlation we just need the Y values. So we will create another dataframe but with only the amplitudes
+
+```{r,echo=FALSE}
+curveIndexes<-seq(from=2,to=ncol(curves),by=1)
+myvars<-names(curves[curveIndexes])
+curveSubset=curves[myvars]
+
+
+```
+
+We need to remove some of the curves which do not have the UV values. These are the curves from the bioreactors
+
+```{r,echo=FALSE}
+#get all the curves that have same mean and max different which means they dont have varying values as
+#they are represnting some contant number like rocker 
+#tt<-apply(curveSubset,2,function(x){mean(x,na.rm=T)==max(x,na.rm=T)})
+#remove them from curveSubset
+#curveSubset<-curveSubset[!tt]
+```
+
+**Correlation Matrix **
+Now calculate the correlation matrix. This matrix will be the major source for similarity comparison
+If using the two curves we draw a plot then the correlation plots should be around a 45 degree line passing through the origin. Perfect correlation will occur if the two curves are same
+
+
+
+```{r,echo=FALSE}
+correlationMatrix<-cor(curveSubset,use='pairwise.complete.obs')
+head(correlationMatrix,n = 2)
+#this function will give us the curves which are too close
+```
+
+Now we need to remove the entries which are too much differnet. Currently we are setting the similarity score to be minimum of 0.96
+
+```{r,echo=FALSE}
+#we want to basically eleminate teh entries in the matrix that are below the 0.96 limit. Note that 
+#the matrix also has the column names and the rownames which are very important to understans which curve 
+# is correlated and by how much. 
+#the way to omit the entries and retain the column names and ro names is to use the sort function
+#correlationMatrix[correlationMatrix>0.90 & correlationMatrix<0.80]<-NA
+correlationMatrix[correlationMatrix<filterFactor]<-NA
+
+#sort the matrix which will remove the NAs and also sort the data. The return will be a list which has 
+#matrix rowname as the index
+filteredList<-apply(correlationMatrix,1,sort,decreasing=TRUE)
+
+```
+
+
+we can have a small function where we enter the name of the chromatogram and get back the similarities
+
+```{r,echo=FALSE}
+#basically give the curvename get the list entry against that curve
+findSimilarCurves=function(curveName){
+  filteredList[[curveName]]
+}
+
+#findSimilarCurves("Chrom_217")
+```
+
+
+
+
+** Plotting the Similar Curves **
+Now in order to draw plots between the chromatograms which fall above .96 similarity we use the filtered list that we created earlier
+
+```{r,echo=FALSE}
+
+colors<-c("red","blue","green","yellow","red")
+drawSimilarCurves=function(refCurveName,similarCurves)
+  {
+#for(i in 1:ncol(curveSubset))
+  #{
+      #tempFilteredList=findSimilarCurves("Chrom_217");
+      #get the curve for which we want to find the similar curves...reference curve
+      #curveName<-labels(filteredList)[i]
+      curveName=refCurveName
+      #the retention values are given in teh original dataframe with columns with suffix _t
+      curveRetentionName<-paste0(curveName,"_t")
+      #get the similar curves
+      #similarCurves<-findSimilarCurves(curveName)
+      #generate the xlabel which will tell all the curve names in the plot. Collapse is required to remove 
+      #unnecessary quotes..we are using a concatenated string to appear in the x axis so that 
+      #we can know which all curves are overlapping
+      xlabel=paste0(":",similarCurves,collapse="")
+      #we will draw the plots only if the reference curve is correlated to other curves
+      if(length(similarCurves)>1)
+        {
+          #mainCurveX<-curves[,curveRetentionName]
+          #mainCurveY<-curves[,curveName]
+        
+          #we will use the original curves dataframe to get the required x.y coordinates
+          #we first draw the reference curve
+          #plot(na.omit(curves[,curveRetentionName]),na.omit(curves[,curveName]),xlab = xlabel,ylab=curveName,type='l')  
+          #no need to have the retention as it is being taken as a seperate line
+          plot(na.omit(curves[,curveName]),xlab = xlabel,ylab=curveName,type='l')  
+          
+          for(j in 2:length(similarCurves))
+            {
+                #overlapping curves are drawn on the reference curve using the points() function
+                subcurveName<-similarCurves[j]
+                subcurveRetentionName<-paste0(subcurveName,"_t")
+                #points(na.omit(curves[,subcurveRetentionName]),na.omit(curves[,subcurveName]),col=colors[j],type='l',xlab=subcurveName)  
+                points(na.omit(curves[,subcurveName]),col=colors[j],type='l',xlab=subcurveName)  
+                
+            }  
+          #legend("topright",1,labels(similarCurves))
+          
+        }
+      
+  #}
+  }
+
+```
+
+**Computational Parameters**
+*IN order to verify our correlations we need to take another calculations. Eucleadian distance measures how far two points are on a the eucleadian plot. We will have to consider all the points on the curves to get teh distance.
+If the two curves are similar than there will not be huge distance between two points corresponding to two curves. (Note we are assuming that total number of points are same on both teh curves)
+
+*Another measure is the Area under the curves. It cannot tell you if the two curves are similar on its own 
+since the two curves can be dissimilar but may have peaks which if calculated the Area dunder will compute out to be same. Area under the curve si useful other way rounf just like the eucleadian distance. You will know that the two curves are similar based on the correlation, bu t now you jsut want to verify if the correlation is predicting the correct status.
+Area under the curve simialr will show that the total yield is simialr.
+
+
+Eucledian distance calculation
+```{r,echo=FALSE}
+
+library(pracma)
+
+euc=function(curve1,curve2)
+{
+  maxCurve1=max(curve1,na.rm=T)
+  minCurve1=min(curve1,na.rm=T)
+  den1=maxCurve1-minCurve1
+  
+  maxCurve2=max(curve2,na.rm=T)
+  minCurve2=min(curve2,na.rm=T)
+  den2=maxCurve2-minCurve2
+  
+  normCurve1=(curve1-minCurve1)/den1
+  normCurve2=(curve2-minCurve2)/den2
+  
+  sqrt(sum((normCurve1-normCurve2)^2,na.rm=T))
+  #sqrt(sum((curve1-curve2)^2,na.rm=T))
+}
+```
+
+```{r,echo=FALSE}
+#this  is a special function that will take a list of similar lists and retrun a matrix connecting things of our interest that is eucledian distance and the AUC
+computationData=function(curveList,similarityScores)
+{
+  #curveList<-labels(filteredList[["WTG001"]])
+  eucDistances=rep(0,length(curveList))
+  peakArea=rep(0,length(curveList))
+  percentagePeakAreaVar=rep(0,length(curveList))
+  sumPoints=rep(0,length(curveList))
+  numOfObservations=nrow(curves[1])
+  #moccaDistance=rep(0,length(curveList))
+  #computedValuesMat[1,]<-curveList
+  for(i in 1:length(curveList))
+  {
+    #i=1
+    #eucDistances[i]<-euc(na.omit(curveSubset[,curveList[1]]),na.omit(curveSubset[,curveList[i]]))
+    eucDistances[i]<-euc(curveSubset[,curveList[1]],curveSubset[,curveList[i]])
+    
+    #eucDistances[i]<-mean(curveSubset[,curveList[i]],na.rm=T)
+    #curveRetentionName<-paste0(curveList[i],"_t")
+    curveName<-curveList[i]
+    #number of observations
+    
+    #peakArea[i]<-trapz(c(1:numOfObservations),na.omit(curves[,curveName]))
+    peakArea[i]<-sum(curves[,curveName])
+    #sumPoints[i]<-sum(curves[,curveName])  
+  }
+  
+  refCurve<-peakArea[1]
+  percentagePeakAreaVar<-(abs(refCurve-peakArea)/abs(refCurve))*100
+  peakAreaTolerance<-(abs(refCurve-peakArea)/abs(refCurve))*100<15
+  eucTolerance<-eucDistances<1.5
+  #truthiness==TRUE & 
+  
+  #hack: Uncomment to see all the data and not filter on very high similarity
+  #peakAreaTolerance<-rep(TRUE,length(peakArea))
+  #eucTolerance<-rep(TRUE,length(eucDistances))
+  #hack over  
+  eucDistances<-eucDistances[peakAreaTolerance==TRUE & eucTolerance==TRUE]
+  percentagePeakAreaVar<-percentagePeakAreaVar[peakAreaTolerance==TRUE & eucTolerance==TRUE]
+  peakArea<-peakArea[peakAreaTolerance==TRUE & eucTolerance==TRUE]
+  similarityScores<-similarityScores[peakAreaTolerance==TRUE & eucTolerance==TRUE]
+  curveList<-curveList[peakAreaTolerance==TRUE & eucTolerance==TRUE]
+  #print(truthiness)
+  #print(eucDistances)
+  #print(peakArea)
+  #print(similarityScores)
+  
+  computedValuesMat=matrix(1:length(curveList)*4,nrow=4,ncol=length(curveList))
+  colnames(computedValuesMat) <- curveList
+  rownames(computedValuesMat)<-c("Eucledian","Peak Area","PeakArea Var","Correlation")
+  
+  #cat("curves",labels(eucDistances),file="output.txt",append=TRUE)
+  #cat("\n",file="output.txt",append=TRUE)
+  
+  computedValuesMat[1,]<-eucDistances;
+  
+  computedValuesMat[2,]<-peakArea;
+  
+  computedValuesMat[3,]<-percentagePeakAreaVar;
+  
+  computedValuesMat[4,]<-similarityScores
+  
+  #computedValuesMat[5,]<-sumPoints
+  
+  
+  if(length(eucDistances)>1)
+  {
+    
+    cat("curves",curveList,file="output.txt",append=TRUE)
+    cat("\n",file="output.txt",append=TRUE)
+    cat("eucDistances",eucDistances,file="output.txt",append=TRUE)
+    cat("\n",file="output.txt",append=TRUE)
+    cat("peakArea",peakArea,file="output.txt",append=TRUE)
+    cat("\n",file="output.txt",append=TRUE)
+    cat("peakVAriation",percentagePeakAreaVar,file="output.txt",append=TRUE)
+    cat("\n",file="output.txt",append=TRUE)
+    cat("correlation",similarityScores,file="output.txt",append=TRUE)
+    cat("\n",file="output.txt",append=TRUE)
+    
+  }
+  
+  #resturn the values
+  computedValuesMat
+}
+
+
+
+```
+Print the list of the curves
+```{r,echo=FALSE}
+  printCurveDetails<-function(curveName,similarCurveNames,curveNamesMat){
+    print(curveName)
+    
+    #cat(paste(curveNamesMat[curveName,1], curveNamesMat[curveName,2],curveNamesMat[curveName,3],sep="=>"), file="output.txt",append=TRUE)
+    #cat("\n",file="output.txt",append=TRUE)
+    
+    #print(paste(curveNamesMat[curveName,1], curveNamesMat[curveName,2],curveNamesMat[curveName,3],sep="=>"))
+    
+    for(i in 2:length(similarCurveNames))
+      {
+        print(paste(curveNamesMat[similarCurveNames[i],1], curveNamesMat[similarCurveNames[i],2],curveNamesMat[similarCurveNames[i],3], sep="=>"))
+        cat(paste(curveNamesMat[similarCurveNames[i],1], curveNamesMat[similarCurveNames[i],2],curveNamesMat[similarCurveNames[i],3], sep="=>"),file="output.txt",append=TRUE)
+        
+        cat("\n",file="output.txt",append=TRUE)
+        
+      }
+    
+  }
+
+
+```
+
+
+Test data 
+
+```{r,echo=FALSE}
+
+#create a list of ref curves that you want to check
+#curveList<-c("Chrom_224","Chrom_226","Chrom_225","Chrom_211","Chrom_222","Chrom_242")
+#curveList<-c("Chrom_207","Chrom_208","Chrom_209","Chrom_210","Chrom_211","Chrom_309","Chrom_217")
+ccc<-labels(curveSubset)
+curveList<-ccc[[2]]
+#par(mfrow=c(2,2))
+for(i in 1:length(curveList))
+{
+ i=2
+  #get the name of the curve we are interested in 
+    #curveName<-labels(filteredList)[i]
+    #curveName="Chrom_217"
+    curveName<-curveList[i]
+    #print(curveName)
+    #get the curve list against the curve
+    similarCurves<-findSimilarCurves(curveName)
+    if(length(similarCurves)>1)
+      {
+      #compute the qualitative parameters
+      computedData<-computationData(labels(similarCurves),as.vector(similarCurves))
+      #if after the computation we dont have any neighbor curve left then just remove it
+      if(length(labels(computedData)[[2]])>1)
+        {
+         
+        updatedSimilarCurves<-labels(computedData)
+        updatedSimilarCurves<-updatedSimilarCurves[[2]]
+        #print(updatedSimilarCurves)
+        drawSimilarCurves(curveName,updatedSimilarCurves)
+        print(computedData)
+        print(turbineSummary[labels(similarCurves),])
+         # printCurveDetails(curveName,updatedSimilarCurves,curveNamesMat)
+        #cat(computedData,file="output.txt",append=TRUE)
+        cat("\n",file="output.txt",append=TRUE)
+        cat("-----------------------------------------\n")
+        cat("-----------------------------------------------------\n",file="output.txt",append=TRUE)
+        
+      }
+    }
+    else
+      {
+         s="No Similar curves found for"
+         s<-paste(s,curveName)
+         #print(s)
+      }
+}
+
+```
+
+
