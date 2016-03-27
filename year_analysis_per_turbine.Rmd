@@ -1,0 +1,259 @@
+Read the data from the database
+
+```{r}
+library(RMySQL)
+mydb = dbConnect(MySQL(), user='root', password='', dbname='pgs', host='localhost')
+
+turbineData <- dbGetQuery(mydb, "Select * from turbineData order by timestamp")
+str(turbineData)
+
+
+curveIndexes1<-seq(from=1,to=9,by=1)
+#curveIndexes2<-c(10:20,22,23,25:28,31,34,38,40:43,45:52,55,56)
+curveIndexes2<-seq(from=10,to=56,by=1)
+curveIndexesCombined=c(paste0("WTG00",1:9),paste0("WTG0",10:20),"WTG022","WTG023",
+                       paste0("WTG0",25:28),"WTG031","WTG034","WTG038",paste0("WTG0",40:43),
+                       paste0("WTG0",45:48),"WTG050","WTG051","WTG052","WTG055","WTG056")
+
+p1=paste0("WTG00",curveIndexes1)
+p2=paste0("WTG0",curveIndexes2)
+curveIndexes=c(p1,p2)
+curveIndexes1=as.factor(curveIndexes)
+curveIndexes1=curveIndexes
+
+numberOfTurbines=length(curveIndexesCombined)
+curveNames=curveIndexesCombined
+```
+Define the function to get the compass directions
+
+```{r}
+getCompassDirection=function(heading){
+  if (is.na(heading))
+    NA
+  if(heading>348.75 & heading <360.1)
+    "N"
+  else if(heading>=0 & heading <11.25)
+    "N"
+  else if(heading>11.25 & heading <33.75)
+    "NNE"
+  else if(heading>33.75 & heading <56.25)
+    "NE"
+  else if(heading>56.25 & heading <78.75)
+    "ENE"
+  else if(heading>78.75 & heading <101.25)
+    "E"
+  else if(heading>101.25 & heading <123.75)
+    "ESE"
+  else if(heading>123.75 & heading <146.25)
+    "SE"
+  else if(heading>146.25 & heading <168.75)
+    "SSE"
+  else if(heading>168.75 & heading <191.25)
+    "S"
+  else if(heading>191.25 & heading <213.75)
+    "SSW"
+  else if(heading>213.75 & heading <236.25)
+    "SW"
+  else if(heading>236.25 & heading <258.75)
+    "WSW"
+  else if(heading>258.75 & heading <281.25)
+    "W"
+  else if(heading>281.25 & heading <303.75)
+    "WNW"
+  else if(heading>303.75 & heading <326.25)
+    "NW"
+  else if(heading>326.25 & heading <348.75)
+    "NNW"
+  
+}
+
+meanDirection=function(x)
+{
+  #names(sort(table(x),decreasing = TRUE))[1]
+  sort(table(x),decreasing = TRUE)
+
+}
+
+changingDirection=function(x)
+{
+  ll=length(names(sort(table(x))))
+  ss=sum(table(x))
+  as.character(c(ll,":",ss))
+}
+
+countUniqueDirections=function(x)
+{
+  ll=length(names(sort(table(x))))
+  return(ll);
+}
+
+countNumberOfReadings=function(x)
+{
+  ss=sum(table(x))
+  return(ss)
+}
+
+myMean=function(x)
+{
+  ss=sum(table(x))
+  #return(ll);
+  return(sum(x)/ss)
+}
+
+
+findMeanDirection=function(x,monthName)
+{
+  #i think the mean diraction can be found by first c
+  #first get the nascelle disrtibuted by months
+  nacelleMon=subset(x$nacelle,x$month==monthName)
+  directions=sapply(nacelleMon,getCompassDirection)
+  directions=unlist(directions)
+  sort(table(directions),decreasing = TRUE)
+  
+}
+
+
+
+
+
+```
+
+
+```{r}
+df=turbineData
+df$compassDirection=lapply(df$nacelle,getCompassDirection)
+#df$compassDirection=unlist(df$compassDirection)
+tt<-as.Date(df$timestamp)
+df$days=as.factor(format(tt,'%d_%b'))
+df$month=as.factor(format(tt,'%b'))
+
+newOrder=unique(format(tt,'%d'))
+#months=unique(df$month)
+months=c("Sep","Aug","Jul","Jun")
+colors=c("red","green","blue","yellow")
+library(plotrix)
+#newfactors1=paste0(newOrder[1:30],"_",months[1])
+#newfactors2=paste0(newOrder[1:31],"_",months[2])
+#newfactors=c(newfactors1,newfactors2)
+
+
+#df$days = factor(df$days,levels(x)[c(4,5,1:3)])
+
+#draw power plots of this turbine
+for(i in c(1:numberOfTurbines)){
+ i=2    
+ #individualTurbineData=df
+ individualTurbineData=subset(df,df$turbineId==curveIndexesCombined[i])
+ unsortedPowerByDay=by(individualTurbineData$power,individualTurbineData$days,sum)
+ #sortedPowerByDayJul=unsortedPowerByDay[seq(1,61,2)]
+ #sortedPowerByDayJun=unsortedPowerByDay[seq(2,61,2)]
+ #sortedPowerByDay=c(sortedPowerByDayJul,sortedPowerByDayJun)
+ #library(ggplot2)
+ barplot(unsortedPowerByDay,main = paste0("power curve for ",curveNames[i]),col=colors,legend=months,beside=TRUE)
+ #qplot(factor(months), data=unsortedPowerByDay, geom="bar", fill=factor(months))
+ #ggplot(unsortedPowerByDay, aes(factor(months)))
+ 
+ 
+ 
+ unsortedTemperatureByDay=by(individualTurbineData$temperature,individualTurbineData$days,mean)
+ barplot(unsortedTemperatureByDay,main = paste0("temp curve for",curveNames[i]),col=colors,legend=months,beside=TRUE)
+ 
+ 
+ unsortedAvgPowerByDay=by(individualTurbineData$power,individualTurbineData$days,mean)
+ barplot(unsortedAvgPowerByDay,main = paste0("Avg power curve for ",curveNames[i]),col=colors)
+ 
+ 
+ #individualTurbineData$compassDirection=as.factor(individualTurbineData$compassDirection)
+ #similarly for the wind speed
+ unsortedAverageWindSpeedByDay=by(individualTurbineData$windspeed,individualTurbineData$days,myMean)
+ barplot(unsortedAverageWindSpeedByDay,main = paste0("wind curve for ",curveNames[i]),col=colors)
+ 
+ 
+ #monthly
+ monthlyPowerProduced=tapply(individualTurbineData$power,individualTurbineData$month,sum)
+ monthlyAvgWindSpeed=tapply(individualTurbineData$windspeed,individualTurbineData$month,myMean)
+ #monthlyAvgNascellePosition=tapply(individualTurbineData$nacelle, individualTurbineData$month,mean)
+ #monthlyCompassDirection=sapply(monthlyAvgNascellePosition,getCompassDirection)
+ monthlyAvgTemperature=tapply(individualTurbineData$temperature,individualTurbineData$month,mean)
+ monthMat=data.frame(matrix(ncol=3,nrow=length(months)))
+ monthMat[,1]=monthlyPowerProduced
+ monthMat[,2]=monthlyAvgWindSpeed
+ monthMat[,3]=monthlyAvgTemperature
+ #monthMat[,4]=monthlyCompassDirection
+ rownames(monthMat)=names(monthlyPowerProduced)
+ colnames(monthMat)=c("Total Power","Avg Wind Speed","Avg Temp")
+ print(monthMat)
+ 
+ 
+ 
+ 
+ 
+ #direction distributions
+# windDirectionperDay=by(individualTurbineData$compassDirection,individualTurbineData$day#s,meanDirection)
+  
+ 
+ #plot(individualTurbineData$days,individualTurbineData$power,main=curveIndexesCombined[i])
+ 
+ #plot(individualTurbineData$days,individualTurbineData$power,main=curveIndexesCombined[i],type='l')
+ 
+ 
+
+  
+  
+  for(j in c(1:length(months))){
+  #subsetDataForJune=subset(individualTurbineData,individualTurbineData$month=="Jun")
+  #subsetDataForJuly=subset(individualTurbineData,individualTurbineData$month=="Jul")
+  directions=findMeanDirection(individualTurbineData,months[j])
+  cat("Directions for the month",months[j])
+  print(directions)
+  
+  subsetData=subset(individualTurbineData,individualTurbineData$month==months[j])  
+  spread=max(subsetData$nacelle)-min(subsetData$nacelle)
+  label=paste(curveNames[i],"for month",months[j],spread)
+  polar.plot(subsetData$windspeed,polar.pos=subsetData$nacelle,
+             start=90,clockwise=TRUE,rp.type="s",
+             point.symbols=19,boxed.radial=FALSE, 
+             radial.labels="",main = label,lwd=2,line.col=4) 
+
+  #polar.plot(subsetDataForJuly$windspeed,polar.pos=subsetDataForJuly$nacelle,
+   #          start=90,clockwise=TRUE,rp.type="s",
+    #         point.symbols=19,boxed.radial=FALSE, 
+     #        radial.labels="",main = label,lwd=2,line.col=3) 
+
+  }
+}
+
+
+
+```
+
+Importnat thing to note is that in this case the nacelled is restricted to only one section
+
+
+```{r}
+
+individualTurbineData=subset(df,df$turbineId==curveIndexesCombined[1])
+train=individualTurbineData[1:1500,]
+test=individualTurbineData[1501:2559,]
+#need to relevel the factor variables
+model1=lm(power~windspeed+nacelle,data=individualTurbineData)
+summary(model1)
+
+#cart model
+
+
+
+
+```
+
+
+Few observations
+1. the month of july is the maximum. even though we have some missing data but it is still maximum
+2. the month of Jun is second best
+3. In aug the wind has started to decrease
+4. Sept is a lean month with less power produced
+
+The nacelle movement is restricted to few directions is case of june and august while in june and september there has been activity in the movement of nacelle
+When do we move nacelled?
+
+
